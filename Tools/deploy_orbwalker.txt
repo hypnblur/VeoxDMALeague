@@ -1,0 +1,30 @@
+VeoxDMA orbwalker deploy/rebuild (local notes)
+==============================================
+Source: <repo-root>
+Sln:    <repo-root>\leagueoflegends.sln
+
+1. Rebuild (produces no-auth-capable binary with source changes):
+   msbuild leagueoflegends.sln /m /p:Configuration=Release /p:Platform=x64
+   Output: C:\Users\machine2\Documents\PureDMA\League\x64\Release\VeoxDMA.exe
+
+2. Runtime no-auth bypass (rebuilt exe): create C:\VeoxDMA\noauth or set VEOX_NO_AUTH=1.
+   Compile-time: /D VX_NO_AUTH
+
+3. Defaults auto-load from:
+   C:\VeoxDMA\Configs\default.cfg
+   Tuned: orb_cursor_policy=1, orb_path_min=35, orb_path_max=90,
+          orb_react_min=25, orb_react_jitter=55, orb_lasthit_only=1,
+          orb_lasthit_buffer=95, orb_spell_gate=130, orb_humanize=1
+
+4. Per-champion windup override in config:
+   orb_windup_champ_<ChampionName>=<1-100>
+   Example: orb_windup_champ_Jinx=16
+
+5. Stage to desktop share (replace exe after rebuild):
+   \\DESKTOP-Q51HS7K\Users\machine\Desktop\league\
+   Required DLLs from Release\: dbghelp, FTD3XX, FTD3XXWU, leechcore*,
+   symsrv, tinylz4, vcruntime140, vmm, vmmyara.
+
+6. On target machine (DESKTOP-Q51HS7K), copy default.cfg to:
+   C:\VeoxDMA\Configs\default.cfg
+   Optional noauth marker (rebuilt exe): C:\VeoxDMA\noauth

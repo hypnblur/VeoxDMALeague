@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pure KeyGen</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        background: #0a0a0a;
+        color: #e0e0e0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+    }
+    .container {
+        background: #151515;
+        border: 1px solid #2a2a2a;
+        border-radius: 12px;
+        padding: 40px;
+        width: 480px;
+        max-width: 95vw;
+    }
+    h1 {
+        text-align: center;
+        font-size: 24px;
+        margin-bottom: 8px;
+        color: #fff;
+    }
+    .subtitle {
+        text-align: center;
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 32px;
+    }
+    .btn-row {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+    button {
+        flex: 1;
+        padding: 14px 0;
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: #1a1a1a;
+        color: #e0e0e0;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    button:hover { background: #252525; border-color: #555; }
+    button:active { background: #333; }
+    button.active { border-color: #7c5cfc; color: #7c5cfc; }
+    .output {
+        background: #0d0d0d;
+        border: 1px solid #2a2a2a;
+        border-radius: 8px;
+        padding: 16px;
+        min-height: 60px;
+        font-family: 'Consolas', 'Courier New', monospace;
+        font-size: 14px;
+        word-break: break-all;
+        color: #7c5cfc;
+        margin-bottom: 16px;
+        user-select: all;
+        cursor: text;
+    }
+    .output.empty { color: #444; font-family: 'Segoe UI', sans-serif; }
+    .copy-btn {
+        width: 100%;
+        padding: 12px;
+        background: #7c5cfc;
+        border: none;
+        border-radius: 8px;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .copy-btn:hover { background: #6a4ce0; }
+    .copy-btn:disabled { background: #333; color: #666; cursor: default; }
+    .copy-btn.copied { background: #2ecc40; }
+    .info {
+        margin-top: 16px;
+        font-size: 12px;
+        color: #555;
+        text-align: center;
+    }
+    .validate-section {
+        margin-top: 28px;
+        padding-top: 20px;
+        border-top: 1px solid #222;
+    }
+    .validate-section h2 { font-size: 16px; margin-bottom: 12px; color: #aaa; }
+    .validate-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .validate-row input {
+        flex: 1;
+        padding: 10px 12px;
+        background: #0d0d0d;
+        border: 1px solid #2a2a2a;
+        border-radius: 6px;
+        color: #e0e0e0;
+        font-family: 'Consolas', monospace;
+        font-size: 13px;
+    }
+    .validate-row button { flex: 0 0 auto; padding: 10px 20px; }
+    .validate-result { font-size: 13px; padding: 8px 0; }
+    .valid { color: #2ecc40; }
+    .invalid { color: #e74c3c; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>Pure KeyGen</h1>
+    <div class="subtitle">License Key Generator</div>
+
+    <div class="btn-row">
+        <button onclick="generate(1)" id="btn1">1 Day</button>
+        <button onclick="generate(7)" id="btn7">7 Days</button>
+        <button onclick="generate(30)" id="btn30">30 Days</button>
+    </div>
+
+    <div class="output empty" id="output">Click a duration to generate a key</div>
+
+    <button class="copy-btn" id="copyBtn" disabled onclick="copyKey()">Copy to Clipboard</button>
+
+    <div class="info" id="info"></div>
+
+    <div class="validate-section">
+        <h2>Validate Key</h2>
+        <div class="validate-row">
+            <input type="text" id="validateInput" placeholder="PURE-XXXXXXXX-...">
+            <button onclick="validate()">Check</button>
+        </div>
+        <div class="validate-result" id="validateResult"></div>
+    </div>
+</div>
+
+<script>
+const SECRET = [
+    0xA3, 0x7B, 0x12, 0xF8, 0x5E, 0xC1, 0x9D, 0x44,
+    0x6F, 0xB2, 0x88, 0x3A, 0xD7, 0x15, 0xE9, 0x60,
+    0x2C, 0x4E, 0xF3, 0x71, 0x8B, 0xA6, 0x59, 0x0D,
+    0xC8, 0x34, 0x97, 0xE2, 0x1F, 0x6A, 0xB5, 0x43
+];
+
+function rotr32(x, n) {
+    x = x >>> 0;
+    return ((x >>> n) | (x << (32 - n))) >>> 0;
+}
+
+function computeSig(created, expires) {
+    const data = new Uint8Array(40);
+    const dv = new DataView(data.buffer);
+    dv.setUint32(0, created, true);
+    dv.setUint32(4, expires, true);
+    for (let i = 0; i < 32; i++) data[8 + i] = SECRET[i];
+
+    let h = new Uint32Array([0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a]);
+    for (let round = 0; round < 8; round++) {
+        for (let i = 0; i < 40; i++) {
+            h[i % 4] = (h[i % 4] ^ Math.imul(data[i], 0x01000193)) >>> 0;
+            h[i % 4] = (Math.imul(rotr32(h[i % 4], 13), 5) + 0xe6546b64) >>> 0;
+        }
+        for (let j = 0; j < 4; j++) {
+            data[j * 4]     ^= h[j] & 0xFF;
+            data[j * 4 + 1] ^= (h[j] >> 8) & 0xFF;
+            data[j * 4 + 2] ^= (h[j] >> 16) & 0xFF;
+            data[j * 4 + 3] ^= (h[j] >> 24) & 0xFF;
+        }
+    }
+
+    const sig = new Uint8Array(16);
+    const sv = new DataView(sig.buffer);
+    for (let i = 0; i < 4; i++) sv.setUint32(i * 4, h[i], true);
+    return sig;
+}
+
+function toHex(bytes) {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+}
+
+function fromHex(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++)
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return bytes;
+}
+
+function formatKey(hex48) {
+    return 'PURE-' + hex48.match(/.{8}/g).join('-');
+}
+
+function parseKey(str) {
+    let clean = str.trim();
+    if (clean.toUpperCase().startsWith('PURE-')) clean = clean.substring(5);
+    clean = clean.replace(/[-\s]/g, '');
+    if (clean.length !== 48 || !/^[0-9A-Fa-f]+$/.test(clean)) return null;
+    const raw = fromHex(clean);
+    const dv = new DataView(raw.buffer);
+    return {
+        created: dv.getUint32(0, true),
+        expires: dv.getUint32(4, true),
+        sig: raw.slice(8)
+    };
+}
+
+let currentKey = '';
+
+function generate(days) {
+    document.querySelectorAll('.btn-row button').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn' + days).classList.add('active');
+
+    const now = Math.floor(Date.now() / 1000);
+    const expires = now + days * 86400;
+    const sig = computeSig(now, expires);
+
+    const raw = new Uint8Array(24);
+    const dv = new DataView(raw.buffer);
+    dv.setUint32(0, now, true);
+    dv.setUint32(4, expires, true);
+    raw.set(sig, 8);
+
+    currentKey = formatKey(toHex(raw));
+
+    const output = document.getElementById('output');
+    output.textContent = currentKey;
+    output.classList.remove('empty');
+
+    document.getElementById('copyBtn').disabled = false;
+    document.getElementById('copyBtn').textContent = 'Copy to Clipboard';
+    document.getElementById('copyBtn').classList.remove('copied');
+
+    const expDate = new Date(expires * 1000);
+    document.getElementById('info').textContent =
+        'Expires: ' + expDate.toLocaleString() + ' (' + days + ' day' + (days > 1 ? 's' : '') + ')';
+}
+
+function copyKey() {
+    if (!currentKey) return;
+    navigator.clipboard.writeText(currentKey).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.textContent = 'Copy to Clipboard';
+            btn.classList.remove('copied');
+        }, 2000);
+    });
+}
+
+function validate() {
+    const input = document.getElementById('validateInput').value;
+    const result = document.getElementById('validateResult');
+
+    const parsed = parseKey(input);
+    if (!parsed) {
+        result.className = 'validate-result invalid';
+        result.textContent = 'Invalid key format';
+        return;
+    }
+
+    const expectedSig = computeSig(parsed.created, parsed.expires);
+    let sigMatch = true;
+    for (let i = 0; i < 16; i++) {
+        if (parsed.sig[i] !== expectedSig[i]) { sigMatch = false; break; }
+    }
+
+    if (!sigMatch) {
+        result.className = 'validate-result invalid';
+        result.textContent = 'Invalid key — signature mismatch';
+        return;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const remaining = parsed.expires - now;
+
+    if (remaining <= 0) {
+        const expDate = new Date(parsed.expires * 1000);
+        result.className = 'validate-result invalid';
+        result.textContent = 'Expired on ' + expDate.toLocaleString();
+        return;
+    }
+
+    const days = Math.floor(remaining / 86400);
+    const hours = Math.floor((remaining % 86400) / 3600);
+    const expDate = new Date(parsed.expires * 1000);
+    result.className = 'validate-result valid';
+    result.textContent = 'Valid — ' + days + 'd ' + hours + 'h remaining (expires ' + expDate.toLocaleString() + ')';
+}
+</script>
+</body>
+</html>
